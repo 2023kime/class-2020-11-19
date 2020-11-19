@@ -36,16 +36,93 @@ week_11_folds <- vfold_cv(week_11_train, v = 5)
 
 * Come up with at least two models that a) you like and would be willing to defend and b) are somewhat different from one another. The two most common model types in these situations are "simple" and "full". The former includes a minimum number of variables. The latter errs on the side of variable inclusion and the creation of interaction terms.
 
+```{r}
+
+first <- stan_glm(formula = primary_06 ~ treatment - 1,
+                  data = week_11_train,
+                  refresh = 0)
+print(first, digits = 4, detail = FALSE)
+
+second <- stan_glm(formula = primary_06 ~ treatment + age + sex + solo - 1,
+                   data = week_11_train,
+                   refresh = 0)
+print(second, digits = 4, detail = FALSE)
+
+third <- stan_glm(formula = primary_06 ~ treatment + age + sex + solo + primary_04*primary_02 - 1,
+                  data = week_11_train,
+                   refresh = 0)
+print(third, digits = 4, detail = FALSE)
+```
+
 * Which data set should we use for this? Why?
 
 * What does it mean if, for example, the coefficient of `treatmentNeighbors` varies across models?
 
 * Do things change if we start using all the data? Is there a danger in doing so?
-
+We don't have a test slice of the data to compare against the training if we 
+use all of the data. The error will be lower, but we will simply be
+cross-validating against itself.
 
 ## Scene 2
 
 **Prompt:** Compare your two models using cross-validation.
+
+```{r}
+
+week11_recipe <- recipe(primary_06 ~ treatment + age + sex + solo + primary_02 + primary_04,
+                        data = week_11_train) %>%
+    step_dummy(all_nominal()) %>%
+   step_interact(~ primary_02:primary_04) 
+
+lm_model <- linear_reg() %>%
+  set_engine("stan") %>%
+  set_mode("regression")
+
+week11_wflow <- workflow() %>%
+  add_model(lm_model) %>% 
+  add_recipe(week11_recipe)
+
+# after workflow
+week11_fit <- fit(week11_wfl, week_11_train)
+
+week11_test_res <- predict(week11_fit,
+                           new_data = week_11_test %>%
+                           select(-primary_06))
+week11_test_res <- bind_cols(week11_test_res,   
+                             week_11_test %>% select(primary_06))
+rmse(week11_test_res, truth = primary_06, estimate = .pred)
+
+
+
+# dan's workflow
+week11_wfl <- workflow() %>% 
+  add_model(linear_reg() %>%
+            set_engine("stan") %>%
+            set_mode("regression")) %>% 
+  add_recipe(recipe(primary_06 ~ treatment + age + sex + solo + primary_02 + primary_04,
+                    data = week_11_train) %>%
+             step_dummy(all_nominal()) %>%
+              step_interact(~primary_02:primary_04)
+             )
+#rmse = 0.4475716	
+
+week11_wfl <- workflow() %>% 
+  add_model(linear_reg() %>%
+            set_engine("stan") %>%
+            set_mode("regression")) %>% 
+  add_recipe(recipe(primary_06 ~ treatment,
+                    data = week_11_train)) %>%
+             step_dummy(all_nominal()) 
+            
+week11_fit <- fit(week11_wfl, week_11_train)
+week11_test_res <- predict(week11_fit,
+                           new_data = week_11_test %>%
+                           select(-primary_06))
+week11_test_res <- bind_cols(week11_test_res,   
+                             week_11_test %>% select(primary_06))
+rmse(week11_test_res, truth = primary_06, estimate = .pred)
+# higher rmse at 0.4607372	
+```
 
 
 ## Scene 3
@@ -54,6 +131,28 @@ week_11_folds <- vfold_cv(week_11_train, v = 5)
 
 * If you have time, redo all the important steps above with the full data set.
 
+```{r}
+
+week11_wfl <- workflow() %>% 
+  add_model(linear_reg() %>%
+            set_engine("stan") %>%
+            set_mode("regression")) %>% 
+  add_recipe(recipe(primary_06 ~ treatment + age + sex + solo + primary_02 + primary_04,
+                    data = week_11) %>%
+             step_dummy(all_nominal()) %>%
+              step_interact(~primary_02:primary_04)
+             )
+week11_fit <- fit(week11_wfl, week_11)
+week11_test_res <- predict(week11_fit,
+                           new_data = week_11_test %>%
+                           select(-primary_06))
+week11_test_res <- bind_cols(week11_test_res,   
+                             week_11_test %>% select(primary_06))
+rmse(week11_test_res, truth = primary_06, estimate = .pred)
+
+# lower estimate at 0.446943 but still not perfect match of model to data
+
+```
 
 
 ## Optional Problems
